@@ -8,7 +8,7 @@ namespace :redmine_s3 do
 
     # updates a single file on s3
     def update_file_on_s3(file, objects)
-      file_path = s3_file_path(file) 
+      file_path = s3_file_path(file)
       conn = RedmineS3::Connection.conn
       object = objects[file_path]
 
@@ -30,7 +30,8 @@ namespace :redmine_s3 do
 
     # enqueue all of the files to be "worked" on
     fileQ = Queue.new
-    Dir.glob(File.join(Rails.root, '/files/*')).each do |file|
+    storage_path = Redmine::Configuration['attachments_storage_path'] || File.join(Rails.root, "files")
+    Dir.glob(File.join(storage_path,'*')).each do |file|
       fileQ << file
     end
 
