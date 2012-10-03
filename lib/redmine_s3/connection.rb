@@ -64,9 +64,7 @@ module RedmineS3
       end
 
       def put(filename, data)
-        objects = self.conn.buckets[self.bucket].objects
-        object = objects[filename]
-        object = objects.create(filename) unless object.exists?
+        object = self.conn.buckets[self.bucket].objects[filename]
         options = {}
         options[:acl] = :public_read unless self.private?
         # options[:content_disposition] = "attachment; filename='#{filename}'"
