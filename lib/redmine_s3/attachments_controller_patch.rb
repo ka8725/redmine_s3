@@ -7,7 +7,7 @@ module RedmineS3
       # Same as typing in the class
       base.class_eval do
         unloadable # Send unloadable so it will not be unloaded in development
-        before_filter :redirect_to_s3, :except => :destroy
+        before_filter :redirect_to_s3, :except => [:destroy, :upload]
         skip_before_filter :file_readable
       end
     end
