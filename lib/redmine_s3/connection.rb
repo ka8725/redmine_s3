@@ -44,7 +44,7 @@ module RedmineS3
 
       def create_bucket
         bucket = self.conn.buckets[self.bucket]
-        bucket.create unless bucket.exists?
+        self.conn.buckets.create(self.bucket) unless bucket.exists?
       end
 
       def endpoint
