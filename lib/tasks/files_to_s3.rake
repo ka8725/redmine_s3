@@ -9,7 +9,7 @@ namespace :redmine_s3 do
 
         # get the file modified time, which will stay nil if the file doesn't exist yet
         # we could check if the file exists, but this saves a head request
-        s3_digest = object.etag rescue nil 
+        s3_digest = object.etag[1...-1] rescue nil 
 
         # put it on s3 if the file has been updated or it doesn't exist on s3 yet
         if s3_digest.nil? || s3_digest != attachment.digest
