@@ -29,7 +29,10 @@ namespace :redmine_s3 do
     end
 
     # enqueue all of the files to be "worked" on
-    attachments = Attachment.find(:all)
+    queue = Queue.new
+    Attachment.find(:all).each do |attachment|
+      queue.push attachment
+    end
 
     # init the connection, and grab the ObjectCollection object for the bucket
     conn = RedmineS3::Connection.establish_connection
@@ -39,8 +42,10 @@ namespace :redmine_s3 do
     threads = Array.new
     8.times do
       threads << Thread.new do
-        while !attachments.empty?
-          update_file_on_s3(attachments.pop, objects)
+        while true do
+          attachment = queue.pop(true) rescue nil
+          break unless attachment
+          update_file_on_s3(attachment, objects)
         end
       end
     end
