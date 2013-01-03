@@ -63,12 +63,19 @@ module RedmineS3
         @@s3_options[:secure]
       end
 
-      def put(filename, data)
-        object = self.conn.buckets[self.bucket].objects[filename]
-        options = {}
-        options[:acl] = :public_read unless self.private?
-        # options[:content_disposition] = "attachment; filename='#{filename}'"
-        object.write(data, options)
+      def put(attachment, data)
+        object = self.conn.buckets[self.bucket].objects[attachment.disk_filename]
+        if !object.exists? || attachment.digest != object.etag
+          options = {}
+          options[:acl] = :public_read unless self.private?
+          options[:content_disposition] = "inline; filename='#{ERB::Util.url_encode(attachment.filename)}'"
+          options[:content_type] = attachment.content_type
+          # Prevent multipart upload, so that the object ETag is the content's MD5
+          options[:single_request] = true
+          object.write(data, options)
+        end
+        # Returns the object ETag, hopefully its MD5
+        object.etag
       end
 
       def delete(filename)
