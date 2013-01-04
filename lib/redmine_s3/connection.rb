@@ -75,7 +75,7 @@ module RedmineS3
 
       def put(attachment, data)
         # if data is a string, turns it into a buffer
-        if !data.respond_to?(:read)
+        if data.is_a?(String)
           data = StringIO.new(data)
         end
 
