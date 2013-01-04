@@ -1,10 +1,15 @@
 require 'aws-sdk'
+require 'stringio'
 
 AWS.config(:ssl_verify_peer => false)
 
 module RedmineS3
+  class TransferError < RuntimeError
+  end
+
   class Connection
     @@conn = nil
+    @@bucket = nil
     @@s3_options = {
       :access_key_id     => nil,
       :secret_access_key => nil,
@@ -43,8 +48,13 @@ module RedmineS3
       end
 
       def create_bucket
-        bucket = self.conn.buckets[self.bucket]
-        self.conn.buckets.create(self.bucket) unless bucket.exists?
+        if !@@bucket
+          @@bucket = self.conn.buckets[self.bucket]
+          if !@@bucket.exists?
+            @@bucket = self.conn.buckets.create(self.bucket)
+          end
+        end
+        @@bucket
       end
 
       def endpoint
@@ -64,18 +74,75 @@ module RedmineS3
       end
 
       def put(attachment, data)
-        object = self.conn.buckets[self.bucket].objects[attachment.disk_filename]
-        options = {}
-        options[:acl] = :public_read unless self.private?
-        options[:content_disposition] = "inline; filename='#{ERB::Util.url_encode(attachment.filename)}'"
-        options[:content_type] = attachment.content_type
-        # Prevent multipart upload, so that the object ETag is the content's MD5
-        options[:single_request] = true
-        object.write(data, options)
+        # if data is a string, turns it into a buffer
+        if !data.respond_to?(:read)
+          data = StringIO.new(data)
+        end
 
-        # Returns the object ETag, hopefully its MD5
-        # Need to remove the quotes
-        object.etag[1...-1]
+        do_put = Proc.new do
+          # Allows retries, if supported
+          if data.respond_to?(:seek)
+            data.seek(0)
+          end
+
+          # Object options
+          options = {
+            :content_disposition => "inline; filename='#{ERB::Util.url_encode(attachment.filename)}'",
+            :content_type => attachment.content_type,
+            :content_length => data.size,
+            # Prevent multipart upload, so that the object ETag is the content's MD5
+            :single_request => true
+          }
+          options[:acl] = :public_read unless self.private?
+
+          # Streaming upload, we'll compute the MD5 while we're at it
+          md5 = Digest::MD5.new
+          object = self.create_bucket.objects[attachment.disk_filename]
+          object = object.write(options) do |buffer, bytes|
+            if read = data.read(bytes)
+              md5.update(read)
+              buffer.write(read)
+            end
+          end
+
+          # Check digests
+          md5 = md5.hexdigest
+          if !(attachment.digest.nil? || attachment.digest == md5)
+            puts "WARNING : wrong digest for file #{attachment.disk_filename}"
+            # TODO : update attachment.digest ?
+          end
+
+          s3_md5 = self.try("get MD5 for #{object.key}") { object.etag[1...-1] }
+          if s3_md5 != md5
+            raise TransferError.new("MD5 mismatch for file #{attachment.disk_filename}, local=#{md5}, S3=#{s3_md5}")
+          end
+
+          # Returns the MD5
+          md5
+        end
+
+        # Try multiple times, if possible (i.e. data is seekable)
+        if data.respond_to?(:seek)
+          self.try("sending #attachment.disk_filename}", &do_put)
+        else
+          do_put.call
+        end
+      end
+
+      def try(name, max_tries=3, base_wait=0.25, exponent=2, &block)
+        try = 0
+        wait = base_wait
+        while true
+          begin
+            try = try + 1
+            return block.call
+          rescue => e
+            raise if try==max_tries
+            puts "WARNING : #{name} failed due to #{e} (try #{try})"
+            sleep(wait)
+            wait = wait * exponent
+          end
+        end
       end
 
       def delete(filename)

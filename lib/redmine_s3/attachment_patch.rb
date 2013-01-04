@@ -20,8 +20,7 @@ module RedmineS3
       def put_to_s3
         if @temp_file && (@temp_file.size > 0)
           logger.debug("Uploading to #{disk_filename}")
-          content = @temp_file.respond_to?(:read) ? @temp_file.read : @temp_file
-          self.digest = RedmineS3::Connection.put(self, content)
+          self.digest = RedmineS3::Connection.put(self, @temp_file)
         end
         @temp_file = nil # so that the model's original after_save block skips writing to the fs
       end

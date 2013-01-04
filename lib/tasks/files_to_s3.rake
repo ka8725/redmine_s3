@@ -7,45 +7,84 @@ namespace :redmine_s3 do
       if File.exists?(attachment.diskfile)
         object = objects[attachment.disk_filename]
 
-        # get the file modified time, which will stay nil if the file doesn't exist yet
+        # get the file ETag, which will stay nil if the file doesn't exist yet
         # we could check if the file exists, but this saves a head request
         s3_digest = object.etag[1...-1] rescue nil 
 
         # put it on s3 if the file has been updated or it doesn't exist on s3 yet
-        if s3_digest.nil? || s3_digest != attachment.digest
-          puts "Put file " + attachment.disk_filename
-          File.open(attachment.diskfile, 'rb') do |fileObj|
-            RedmineS3::Connection.put(attachment, fileObj)
-          end
-          # If you really know what you are doing
-          # TODO : Maybe add a task option for this ?
-          # File.delete(attachment.diskfile)
+        if s3_digest.nil?
+          puts "Sending file #{attachment.disk_filename}..."
+        elsif s3_digest != attachment.digest 
+          puts "Updating file #{attachment.disk_filename}..."
         else
-          puts attachment.disk_filename + ' is up-to-date on S3'
+          # puts attachment.disk_filename + ' is up-to-date on S3'
+          return
+        end
+
+        File.open(attachment.diskfile, 'rb') do |data|
+          RedmineS3::Connection.put(attachment, data)
         end
       else
-        puts attachment.disk_filename + ' is already migrated on S3'
+        # puts attachment.disk_filename + ' is already migrated on S3'
       end
     end
 
     # enqueue all of the files to be "worked" on
-    queue = Queue.new
+    # TODO : batch process in order to avoid loading
+    # everything in RAM
+    attachments_queue = Queue.new
     Attachment.find(:all).each do |attachment|
-      queue.push attachment
+      attachments_queue.push attachment
     end
+
+    # Initialize progress info
+    start_time = Time.now
+    todo = attachments_queue.length
+    done = 0
+    errors = 0
+    last_done_pct = 0
+    report_mutex = Mutex.new
 
     # init the connection, and grab the ObjectCollection object for the bucket
     conn = RedmineS3::Connection.establish_connection
     objects = conn.buckets[RedmineS3::Connection.bucket].objects
 
-    # create some threads to start syncing all of the queued files with s3
+    # create some threads to start syncing all of the queued attachments with s3
     threads = Array.new
     8.times do
       threads << Thread.new do
         while true do
-          attachment = queue.pop(true) rescue nil
-          break unless attachment
-          update_file_on_s3(attachment, objects)
+          # Get attachment, bail out
+          # if no more work
+          begin
+            attachment = attachments_queue.pop(true)
+          rescue ThreadError => te
+            break if te.message == "queue empty"
+            raise
+          end
+          
+          # Actual work
+          error = 0
+          begin
+            update_file_on_s3(attachment, objects)
+          rescue => e
+            puts "Problem with #{attachment.disk_filename} : #{e}"
+            puts e.backtrace.join "\n"
+            error = 1
+          end
+
+          # Report progress
+          report_mutex.synchronize do
+            done = done + 1
+            errors = errors + error
+
+            done_pct = (100.0 * done / todo).to_i
+            if done_pct > last_done_pct
+              eta = Time.now + 1.0 * (todo - done) * (Time.now - start_time) / done
+              puts ">>> #{done} files (#{done_pct}%) done, #{errors} errors... ETA #{eta}"
+              last_done_pct = done_pct
+            end
+          end
         end
       end
     end
@@ -54,6 +93,5 @@ namespace :redmine_s3 do
     threads.each do |thread|
       thread.join
     end
-
   end
 end
