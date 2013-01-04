@@ -29,21 +29,18 @@ namespace :redmine_s3 do
       end
     end
 
-    # enqueue all of the files to be "worked" on
+    # Get all of the attachments to be "worked" on
     # TODO : batch process in order to avoid loading
     # everything in RAM
-    attachments_queue = Queue.new
-    Attachment.find(:all).each do |attachment|
-      attachments_queue.push attachment
-    end
+    attachments = Attachment.find(:all)
 
     # Initialize progress info
     start_time = Time.now
-    todo = attachments_queue.length
+    todo = attachments.length
     done = 0
     errors = 0
     last_done_pct = 0
-    report_mutex = Mutex.new
+    mutex = Mutex.new
 
     # init the connection, and grab the ObjectCollection object for the bucket
     conn = RedmineS3::Connection.establish_connection
@@ -56,12 +53,10 @@ namespace :redmine_s3 do
         while true do
           # Get attachment, bail out
           # if no more work
-          begin
-            attachment = attachments_queue.pop(true)
-          rescue ThreadError => te
-            break if te.message == "queue empty"
-            raise
+          attachment = mutex.synchronize do
+              attachments.pop
           end
+          break if attachment.nil?
           
           # Actual work
           error = 0
@@ -74,7 +69,7 @@ namespace :redmine_s3 do
           end
 
           # Report progress
-          report_mutex.synchronize do
+          mutex.synchronize do
             done = done + 1
             errors = errors + error
 
