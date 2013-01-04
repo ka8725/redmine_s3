@@ -48,7 +48,7 @@ module RedmineS3
       end
 
       def create_bucket
-        if !@@bucket
+        if @@bucket.nil?
           @@bucket = self.conn.buckets[self.bucket]
           if !@@bucket.exists?
             @@bucket = self.conn.buckets.create(self.bucket)
