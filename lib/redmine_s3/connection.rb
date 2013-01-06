@@ -63,11 +63,12 @@ module RedmineS3
         @@s3_options[:secure]
       end
 
-      def put(filename, data)
+      def put(filename, data, content_type='application/octet-stream')
         object = self.conn.buckets[self.bucket].objects[filename]
         options = {}
         options[:acl] = :public_read unless self.private?
-        # options[:content_disposition] = "attachment; filename='#{filename}'"
+        options[:content_type] = content_type if content_type
+        options[:content_disposition] = "inline; filename='#{ERB::Util.url_encode(filename)}'"
         object.write(data, options)
       end
 
