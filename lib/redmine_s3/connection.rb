@@ -118,7 +118,7 @@ module RedmineS3
 
         # Try multiple times, if possible (i.e. data is seekable)
         if data.respond_to?(:seek)
-          self.try("sending #attachment.disk_filename}", &do_put)
+          self.try("sending #{attachment.disk_filename}", &do_put)
         else
           do_put.call
         end
