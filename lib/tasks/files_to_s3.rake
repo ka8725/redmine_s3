@@ -3,7 +3,7 @@ namespace :redmine_s3 do
     require 'thread'
 
     def s3_file_path(file_path)
-      File.basename(file_path).split('_').first + '/' + File.basename(file_path)
+      File.basename(file_path)
     end
 
     # updates a single file on s3
