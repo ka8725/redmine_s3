@@ -19,6 +19,7 @@ This [Redmine](http://www.redmine.org) plugin makes file attachments be stored o
 * Public and private files can use HTTPS urls using the secure option
 * Files can use private signed urls using the private option
 * Private file urls can expire a set time after the links were generated using the expires option
+* If you're using a Amazon S3 clone, then you can do the download relay by using the proxy option.
 
 ## Options Detail
 * access_key_id: string key (required)
@@ -28,4 +29,5 @@ This [Redmine](http://www.redmine.org) plugin makes file attachments be stored o
 * secure: boolean true/false
 * private: boolean true/false
 * expires: integer number of seconds for private links to expire after being generated
-* Defaults to private: false, secure: false, default endpoint, and default expires
+* proxy: boolean true/false
+* Defaults to private: false, secure: false, proxy: false, default endpoint, and default expires

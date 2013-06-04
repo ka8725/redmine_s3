@@ -7,7 +7,7 @@ module RedmineS3
       # Same as typing in the class
       base.class_eval do
         unloadable # Send unloadable so it will not be unloaded in development
-        before_filter :redirect_to_s3, :except => [:destroy, :upload]
+        before_filter :download_from_s3, :except => [:destroy, :upload]
         skip_before_filter :file_readable
       end
     end
@@ -16,11 +16,18 @@ module RedmineS3
     end
 
     module InstanceMethods
-      def redirect_to_s3
+      def download_from_s3
         if @attachment.container.is_a?(Version) || @attachment.container.is_a?(Project)
           @attachment.increment_download
         end
-        redirect_to(RedmineS3::Connection.object_url(@attachment.disk_filename))
+        if RedmineS3::Connection.proxy?
+          send_data RedmineS3::Connection.get(@attachment.disk_filename),
+                                          :filename => filename_for_content_disposition(@attachment.filename),
+                                          :type => detect_content_type(@attachment),
+                                          :disposition => (@attachment.image? ? 'inline' : 'attachment')
+        else
+          redirect_to(RedmineS3::Connection.object_url(@attachment.disk_filename))
+        end
       end
     end
   end

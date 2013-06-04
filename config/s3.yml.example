@@ -6,6 +6,7 @@ production:
   secure:
   private:
   expires: 
+  proxy:
 
 development:
   access_key_id: 
@@ -15,3 +16,4 @@ development:
   secure:
   private:
   expires: 
+  proxy:
