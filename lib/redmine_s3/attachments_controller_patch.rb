@@ -21,10 +21,16 @@ module RedmineS3
           @attachment.increment_download
         end
         if RedmineS3::Connection.proxy?
+          disposition = if @attachment.image? || @attachment.text?
+                          'inline'
+                        else
+                          'attachment'
+                        end
+
           send_data RedmineS3::Connection.get(@attachment.disk_filename),
                                           :filename => filename_for_content_disposition(@attachment.filename),
                                           :type => detect_content_type(@attachment),
-                                          :disposition => (@attachment.image? ? 'inline' : 'attachment')
+                                          :disposition => disposition
         else
           redirect_to(RedmineS3::Connection.object_url(@attachment.disk_filename))
         end
